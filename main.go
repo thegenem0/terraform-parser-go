@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,44 +20,46 @@ func main() {
 	defer database.Close()
 	database.AutoMigrate()
 
-	graph := depsgraph.NewDepsGraph()
-	//
-	// stateFile, _ := os.Open("terraform/sandbox.json")
-	//
-	// stateBytes, _ := io.ReadAll(stateFile)
-	//
-	// database.Connection.Create(&db.State{TerraformState: stateBytes})
+	routes := gin.Default()
 
-	var plan db.Plan
+	routes.POST("/graph", func(ctx *gin.Context) {
 
-	database.Connection.Last(&plan)
+		requestBody := ctx.Request.Body
+		requestBytes, _ := io.ReadAll(requestBody)
 
-	var stateData *tfjson.Plan
+		var payload *tfjson.Plan
 
-	err = json.Unmarshal(plan.TerraformPlan, &stateData)
-	if err != nil {
-		panic(err)
-	}
+		err := json.Unmarshal(requestBytes, &payload)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": fmt.Sprintf("Failed to unmarshal request body: %s", err),
+			})
+			return
+		}
 
-	BuildTree(graph, stateData.PlannedValues.RootModule)
+		graph, err := HandleGraphRoute(payload)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err,
+			})
+		}
 
-	r := gin.Default()
-
-	r.GET("/graph", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+		ctx.JSON(http.StatusOK, gin.H{
 			"graph": graph,
 		})
 	})
 
-	r.GET("/full", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"full": stateData,
-		})
-	})
-
-	r.Run()
+	routes.Run()
 }
 
 func GetFullData(state *tfjson.Plan) *tfjson.Plan {
 	return state
+}
+
+func HandleGraphRoute(plan *tfjson.Plan) (*depsgraph.DepsGraph, error) {
+	graph := depsgraph.NewDepsGraph()
+
+	BuildTree(graph, plan.PlannedValues.RootModule)
+
+	return graph, nil
 }
