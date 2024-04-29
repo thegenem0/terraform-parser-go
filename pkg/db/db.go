@@ -5,6 +5,11 @@ import (
 	"gorm.io/gorm"
 )
 
+type DBServiceInterface interface {
+	Close() error
+	AutoMigrate() error
+}
+
 type DBService struct {
 	Connection *gorm.DB
 }

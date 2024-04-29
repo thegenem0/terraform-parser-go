@@ -8,22 +8,29 @@ import (
 
 	"github.com/gin-gonic/gin"
 	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/thegenem0/terraspect_server/pkg/appctx"
 	"github.com/thegenem0/terraspect_server/pkg/changes"
 	"github.com/thegenem0/terraspect_server/pkg/db"
 	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
 )
 
 func main() {
+
 	database, err := db.NewDBService()
 	if err != nil {
 		panic(err)
 	}
-	defer database.Close()
-	database.AutoMigrate()
-
-	routes := gin.Default()
 
 	changeService := changes.NewChangeService()
+
+	appCtx, err := appctx.Init(database, changeService)
+	if err != nil {
+		panic(err)
+	}
+
+	appCtx.Service().Database.AutoMigrate()
+
+	routes := gin.Default()
 
 	routes.GET("/graph", func(ctx *gin.Context) {
 		graph, err := GetHandleGraphRoute(database, changeService)

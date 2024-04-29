@@ -1,5 +1,11 @@
 package changes
 
+type ChangeServiceInterface interface {
+	GetResourceKeys() []ResourceKey
+	AddResourceKey(modKey string, key string)
+	IsValidKey(modKey string, key string) bool
+}
+
 type ChangeService struct {
 	validResourceKeys []ResourceKey
 }
