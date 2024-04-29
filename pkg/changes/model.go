@@ -1,6 +1,9 @@
 package changes
 
-import tfjson "github.com/hashicorp/terraform-json"
+import (
+	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/thegenem0/terraspect_server/pkg/reflector"
+)
 
 type ResourceKey struct {
 	ModKey string
@@ -11,8 +14,7 @@ type ChangeItem struct {
 	Actions         tfjson.Actions
 	Address         string
 	PreviousAddress string
-	BeforeValue     interface{}
-	AfterValue      interface{}
+	Changes         reflector.ChangeData
 }
 
 type Change struct {

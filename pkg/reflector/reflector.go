@@ -1,12 +1,14 @@
 package reflector
 
 import (
+	"fmt"
 	"reflect"
 )
 
 type SimpleKVPair struct {
-	Key   string      `json:"key"`
-	Value interface{} `json:"value"`
+	Key       string      `json:"key"`
+	Value     interface{} `json:"value"`
+	PrevValue interface{} `json:"prev_value,omitempty"`
 }
 
 type ComplexKVPair struct {
@@ -20,12 +22,12 @@ type VariableData struct {
 }
 
 type ChangeData struct {
-	Values *ComplexKVPair `json:"values"`
+	Values *ComplexKVPair `json:"values,omitempty"`
 }
 
 type IReflectorService interface {
 	HandleVars(variables map[string]interface{}, modKey string) VariableData
-	HandleChanges(changes interface{}) ChangeData
+	HandleChanges(beforeChanges interface{}, afterChanges interface{}) ChangeData
 }
 
 type ReflectorService struct {
@@ -61,13 +63,40 @@ func (rs *ReflectorService) HandleVars(variables map[string]interface{}, modKey 
 	}
 }
 
-func (rs *ReflectorService) HandleChanges(changes interface{}) ChangeData {
-	if !isEmptyValue(changes) && !isDefaultValue(changes) {
-		return ChangeData{
-			Values: handleComplexValue("changes", changes),
+func (rs *ReflectorService) HandleChanges(beforeChanges interface{}, afterChanges interface{}) ChangeData {
+	var beforeData, afterData ChangeData
+
+	if !isEmptyValue(beforeChanges) && !isDefaultValue(beforeChanges) {
+		beforeData = ChangeData{
+			Values: handleComplexValue("before", beforeChanges),
 		}
 	}
-	return ChangeData{}
+
+	if !isEmptyValue(afterChanges) && !isDefaultValue(afterChanges) {
+		afterData = ChangeData{
+			Values: handleComplexValue("after", afterChanges),
+		}
+	}
+
+	if beforeData.Values == nil && afterData.Values == nil {
+		return ChangeData{}
+	}
+
+	changedVars := filterChangedVars(&beforeData, &afterData)
+	for _, common := range changedVars {
+		fmt.Println(common.Key, common.Value)
+	}
+
+	if len(changedVars) == 0 {
+		return ChangeData{}
+	}
+
+	return ChangeData{
+		Values: &ComplexKVPair{
+			Key:   "changes",
+			Value: changedVars,
+		},
+	}
 }
 
 func handleSimpleValue(key string, value interface{}) *SimpleKVPair {
@@ -160,4 +189,29 @@ func isDefaultValue(v interface{}) bool {
 	default:
 		return false
 	}
+}
+
+func sliceToMap(pairs []*SimpleKVPair) map[string]interface{} {
+	m := make(map[string]interface{})
+	for _, pair := range pairs {
+		m[pair.Key] = pair.Value
+	}
+	return m
+}
+
+func filterChangedVars(before, after *ChangeData) []*SimpleKVPair {
+	beforeMap := sliceToMap(before.Values.Value)
+	var changedVars []*SimpleKVPair
+
+	for _, afterItem := range after.Values.Value {
+		beforeItem, exists := beforeMap[afterItem.Key]
+		if exists && !reflect.DeepEqual(beforeItem, afterItem.Value) {
+			changedVars = append(changedVars, &SimpleKVPair{
+				Key:       afterItem.Key,
+				Value:     afterItem.Value,
+				PrevValue: beforeItem,
+			})
+		}
+	}
+	return changedVars
 }

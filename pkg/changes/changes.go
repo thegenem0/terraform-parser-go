@@ -56,20 +56,23 @@ func (cs *ChangeService) BuildChanges(changeData []*tfjson.ResourceChange) {
 				change.Change.Actions,
 				change.Address,
 				change.PreviousAddress,
-				change.Change.Before,
-				change.Change.After,
+				cs.reflectorService.HandleChanges(change.Change.Before, change.Change.After),
 			)
 		}
 	}
 }
 
-func (cs *ChangeService) addChangeResource(actions tfjson.Actions, address string, previousAddress string, before interface{}, after interface{}) {
+func (cs *ChangeService) addChangeResource(
+	actions tfjson.Actions,
+	address string,
+	previousAddress string,
+	changes reflector.ChangeData,
+) {
 	change := ChangeItem{
 		Actions:         actions,
 		Address:         address,
 		PreviousAddress: previousAddress,
-		BeforeValue:     before,
-		AfterValue:      after,
+		Changes:         changes,
 	}
 
 	cs.changes = append(cs.changes, Change{
