@@ -2,8 +2,6 @@ package reflector
 
 import (
 	"reflect"
-
-	"github.com/thegenem0/terraspect_server/pkg/changes"
 )
 
 type SimpleKVPair struct {
@@ -31,18 +29,13 @@ type IReflectorService interface {
 }
 
 type ReflectorService struct {
-	changeService changes.IChangeService
 }
 
-func NewReflectorService(changeService changes.IChangeService) *ReflectorService {
-	return &ReflectorService{
-		changeService: changeService,
-	}
+func NewReflectorService() *ReflectorService {
+	return &ReflectorService{}
 }
 
 func (rs *ReflectorService) HandleVars(variables map[string]interface{}, modKey string) VariableData {
-	changeService := rs.changeService
-
 	var simpleValues []*SimpleKVPair
 	var complexValues []*ComplexKVPair
 
@@ -51,13 +44,11 @@ func (rs *ReflectorService) HandleVars(variables map[string]interface{}, modKey 
 			if getValueType(value) == reflect.Slice || getValueType(value) == reflect.Map {
 				complexValue := handleComplexValue(key, value)
 				if complexValue != nil {
-					changeService.AddResourceKey(modKey, complexValue.Key)
 					complexValues = append(complexValues, complexValue)
 				}
 			} else {
 				simpleValue := handleSimpleValue(key, value)
 				if simpleValue != nil {
-					changeService.AddResourceKey(modKey, simpleValue.Key)
 					simpleValues = append(simpleValues, simpleValue)
 				}
 			}

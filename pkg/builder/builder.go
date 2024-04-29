@@ -1,38 +1,51 @@
-package main
+package builder
 
 import (
-	"reflect"
 	"strings"
 
 	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/thegenem0/terraspect_server/pkg/appctx"
-	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
+	"github.com/thegenem0/terraspect_server/pkg/reflector"
 )
 
-type NodeInfo struct {
-	ID       string
-	Label    string
-	FullPath string
+type TreeBuilder struct {
+	reflectorService reflector.IReflectorService
+	tree             TreeData
 }
 
-func BuildTree(ctx appctx.AppContext, graph *depsgraph.DepsGraph, rootModule *tfjson.StateModule, changes []*tfjson.ResourceChange) {
+func NewTreeBuilder(reflectorService reflector.IReflectorService) *TreeBuilder {
+	return &TreeBuilder{
+		reflectorService: reflectorService,
+		tree: TreeData{
+			Nodes: make([]PlanNodeData, 0),
+		},
+	}
+}
 
-	var createNode func(*tfjson.StateModule, string, bool) depsgraph.PlanNodeData
+func (tb *TreeBuilder) GetNodes() []PlanNodeData {
+	return tb.tree.Nodes
+}
 
-	createNode = func(mod *tfjson.StateModule, parentPath string, isRoot bool) depsgraph.PlanNodeData {
+func (tb *TreeBuilder) GetTree() TreeData {
+	return tb.tree
+}
+
+func (tb *TreeBuilder) BuildTree(rootModule *tfjson.StateModule) {
+	var createNode func(*tfjson.StateModule, string, bool) PlanNodeData
+
+	createNode = func(mod *tfjson.StateModule, parentPath string, isRoot bool) PlanNodeData {
 		nodeInfo := getNodeInfo(mod, parentPath, isRoot)
-		node := depsgraph.PlanNodeData{
+		node := PlanNodeData{
 			ID:        nodeInfo.ID,
 			Label:     nodeInfo.Label,
 			Variables: nil,
-			Children:  make([]depsgraph.PlanNodeData, 0),
+			Children:  make([]PlanNodeData, 0),
 			Changes:   nil,
 		}
 
 		for _, res := range mod.Resources {
-			vars := ctx.Service().ReflectorService.HandleVars(res.AttributeValues, res.Address)
+			vars := tb.reflectorService.HandleVars(res.AttributeValues, res.Address)
 
-			childNode := depsgraph.PlanNodeData{
+			childNode := PlanNodeData{
 				ID:        res.Address,
 				Label:     res.Name,
 				Variables: &vars,
@@ -50,7 +63,11 @@ func BuildTree(ctx appctx.AppContext, graph *depsgraph.DepsGraph, rootModule *tf
 	}
 
 	topNode := createNode(rootModule, "", true)
-	graph.AddNode(topNode)
+	tb.addNode(topNode)
+}
+
+func (tb *TreeBuilder) addNode(node PlanNodeData) {
+	tb.tree.Nodes = append(tb.tree.Nodes, node)
 }
 
 func getNodeInfo(mod *tfjson.StateModule, parentPath string, isRoot bool) NodeInfo {
@@ -93,8 +110,4 @@ func parseModulePath(path string) string {
 	}
 
 	return strings.Join(components, ".")
-}
-
-func getValueType(value interface{}) reflect.Value {
-	return reflect.ValueOf(value)
 }

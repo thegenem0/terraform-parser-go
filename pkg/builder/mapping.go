@@ -1,9 +1,13 @@
-package depsgraph
+package builder
 
 import (
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/thegenem0/terraspect_server/pkg/reflector"
 )
+
+type TreeData struct {
+	Nodes []PlanNodeData `json:"nodes,omitempty"`
+}
 
 type PlanNodeData struct {
 	ID        string                  `json:"id,omitempty"`
@@ -18,23 +22,18 @@ type ResourceChanges struct {
 	HasChange          bool                  `json:"has_change"`
 	ChangeOps          []*tfjson.Action      `json:"change_ops,omitempty"`
 	SignificantChanges *reflector.ChangeData `json:"significant_changes,omitempty"`
-	Before             *reflector.ChangeData `json:"omit"`
-	After              *reflector.ChangeData `json:"omit"`
+	Before             *reflector.ChangeData `json:"before,omit"`
+	After              *reflector.ChangeData `json:"after,omit"`
+}
+
+type NodeInfo struct {
+	ID       string
+	Label    string
+	FullPath string
 }
 
 type TFResourceType string
 type TFActionType string
-
-const (
-	TypeFile     TFResourceType = "file"
-	TypeLocal    TFResourceType = "locals"
-	TypeVariable TFResourceType = "variable"
-	TypeOutput   TFResourceType = "output"
-	TypeResource TFResourceType = "resource"
-	TypeData     TFResourceType = "data"
-	TypeModule   TFResourceType = "module"
-	TypeDefault  string         = "unknown file"
-)
 
 const (
 	TypeNoop    TFActionType = "no-op"

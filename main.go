@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/thegenem0/terraspect_server/pkg/appctx"
+	"github.com/thegenem0/terraspect_server/pkg/builder"
 	"github.com/thegenem0/terraspect_server/pkg/changes"
 	"github.com/thegenem0/terraspect_server/pkg/db"
-	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
 	"github.com/thegenem0/terraspect_server/pkg/reflector"
 )
 
@@ -22,8 +22,8 @@ func main() {
 		panic(err)
 	}
 
-	changeService := changes.NewChangeService()
-	reflectorService := reflector.NewReflectorService(changeService)
+	reflectorService := reflector.NewReflectorService()
+	changeService := changes.NewChangeService(reflectorService)
 
 	appCtx, err := appctx.Init(database, changeService, reflectorService)
 	if err != nil {
@@ -47,6 +47,19 @@ func main() {
 		})
 	})
 
+	routes.GET("/changes", func(ctx *gin.Context) {
+		changes, err := GetHandleChangesRoute(appCtx)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"changes": changes,
+		})
+	})
+
 	routes.POST("/graph", func(ctx *gin.Context) {
 
 		requestBody := ctx.Request.Body
@@ -62,7 +75,7 @@ func main() {
 			return
 		}
 
-		graph, err := PostHandleGraphRoute(appCtx, payload)
+		tree, err := PostHandleGraphRoute(appCtx, payload)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -70,7 +83,7 @@ func main() {
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{
-			"graph": graph,
+			"tree": tree.Nodes,
 		})
 	})
 
@@ -81,28 +94,44 @@ func GetFullData(state *tfjson.Plan) *tfjson.Plan {
 	return state
 }
 
-func GetHandleGraphRoute(ctx appctx.AppContext) (*depsgraph.DepsGraph, error) {
+func GetHandleChangesRoute(ctx appctx.AppContext) ([]changes.Change, error) {
 	var plan db.Plan
 	ctx.Service().Database.Connection().First(&plan)
-
-	graph := depsgraph.NewDepsGraph()
 
 	var storedPlan *tfjson.Plan
 
 	err := json.Unmarshal(plan.TerraformPlan, &storedPlan)
 	if err != nil {
-		return nil, err
+		return []changes.Change{}, err
 	}
 
-	BuildTree(ctx, graph, storedPlan.PlannedValues.RootModule, storedPlan.ResourceChanges)
+	ctx.Service().ChangeService.BuildChanges(storedPlan.ResourceChanges)
 
-	return graph, nil
+	return ctx.Service().ChangeService.GetChanges(), nil
 }
 
-func PostHandleGraphRoute(ctx appctx.AppContext, plan *tfjson.Plan) (*depsgraph.DepsGraph, error) {
-	graph := depsgraph.NewDepsGraph()
+func GetHandleGraphRoute(ctx appctx.AppContext) (builder.TreeData, error) {
+	treeBuilder := builder.NewTreeBuilder(ctx.Service().ReflectorService)
 
-	BuildTree(ctx, graph, plan.PlannedValues.RootModule, plan.ResourceChanges)
+	var plan db.Plan
+	ctx.Service().Database.Connection().First(&plan)
 
-	return graph, nil
+	var storedPlan *tfjson.Plan
+
+	err := json.Unmarshal(plan.TerraformPlan, &storedPlan)
+	if err != nil {
+		return builder.TreeData{}, err
+	}
+
+	treeBuilder.BuildTree(storedPlan.PlannedValues.RootModule)
+
+	return treeBuilder.GetTree(), nil
+}
+
+func PostHandleGraphRoute(ctx appctx.AppContext, plan *tfjson.Plan) (builder.TreeData, error) {
+	treeBuilder := builder.NewTreeBuilder(ctx.Service().ReflectorService)
+
+	treeBuilder.BuildTree(plan.PlannedValues.RootModule)
+
+	return treeBuilder.GetTree(), nil
 }
