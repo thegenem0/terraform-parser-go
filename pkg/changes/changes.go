@@ -1,6 +1,6 @@
 package changes
 
-type ChangeServiceInterface interface {
+type IChangeService interface {
 	GetResourceKeys() []ResourceKey
 	AddResourceKey(modKey string, key string)
 	IsValidKey(modKey string, key string) bool

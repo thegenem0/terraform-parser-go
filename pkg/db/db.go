@@ -5,13 +5,14 @@ import (
 	"gorm.io/gorm"
 )
 
-type DBServiceInterface interface {
+type IDBService interface {
 	Close() error
 	AutoMigrate() error
+	Connection() *gorm.DB
 }
 
 type DBService struct {
-	Connection *gorm.DB
+	connection *gorm.DB
 }
 
 func NewDBService() (*DBService, error) {
@@ -25,12 +26,12 @@ func NewDBService() (*DBService, error) {
 	}
 
 	return &DBService{
-		Connection: db,
+		connection: db,
 	}, nil
 }
 
 func (dbs *DBService) Close() error {
-	sqlDB, err := dbs.Connection.DB()
+	sqlDB, err := dbs.connection.DB()
 	if err != nil {
 		return err
 	}
@@ -39,10 +40,14 @@ func (dbs *DBService) Close() error {
 
 func (dbs *DBService) AutoMigrate() error {
 	for _, model := range []interface{}{&Plan{}, &State{}} {
-		err := dbs.Connection.AutoMigrate(model)
+		err := dbs.connection.AutoMigrate(model)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (dbs *DBService) Connection() *gorm.DB {
+	return dbs.connection
 }

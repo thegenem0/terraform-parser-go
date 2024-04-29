@@ -5,9 +5,8 @@ import (
 	"strings"
 
 	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/thegenem0/terraspect_server/pkg/changes"
+	"github.com/thegenem0/terraspect_server/pkg/appctx"
 	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
-	"github.com/thegenem0/terraspect_server/pkg/reflector"
 )
 
 type NodeInfo struct {
@@ -16,8 +15,10 @@ type NodeInfo struct {
 	FullPath string
 }
 
-func BuildTree(graph *depsgraph.DepsGraph, rootModule *tfjson.StateModule, changeService *changes.ChangeService, changes []*tfjson.ResourceChange) {
+func BuildTree(ctx appctx.AppContext, graph *depsgraph.DepsGraph, rootModule *tfjson.StateModule, changes []*tfjson.ResourceChange) {
+
 	var createNode func(*tfjson.StateModule, string, bool) depsgraph.PlanNodeData
+
 	createNode = func(mod *tfjson.StateModule, parentPath string, isRoot bool) depsgraph.PlanNodeData {
 		nodeInfo := getNodeInfo(mod, parentPath, isRoot)
 		node := depsgraph.PlanNodeData{
@@ -29,7 +30,7 @@ func BuildTree(graph *depsgraph.DepsGraph, rootModule *tfjson.StateModule, chang
 		}
 
 		for _, res := range mod.Resources {
-			vars := reflector.HandleVars(res.AttributeValues, changeService, res.Address)
+			vars := ctx.Service().ReflectorService.HandleVars(res.AttributeValues, res.Address)
 
 			childNode := depsgraph.PlanNodeData{
 				ID:        res.Address,

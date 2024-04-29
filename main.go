@@ -12,6 +12,7 @@ import (
 	"github.com/thegenem0/terraspect_server/pkg/changes"
 	"github.com/thegenem0/terraspect_server/pkg/db"
 	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
+	"github.com/thegenem0/terraspect_server/pkg/reflector"
 )
 
 func main() {
@@ -22,8 +23,9 @@ func main() {
 	}
 
 	changeService := changes.NewChangeService()
+	reflectorService := reflector.NewReflectorService(changeService)
 
-	appCtx, err := appctx.Init(database, changeService)
+	appCtx, err := appctx.Init(database, changeService, reflectorService)
 	if err != nil {
 		panic(err)
 	}
@@ -33,7 +35,7 @@ func main() {
 	routes := gin.Default()
 
 	routes.GET("/graph", func(ctx *gin.Context) {
-		graph, err := GetHandleGraphRoute(database, changeService)
+		graph, err := GetHandleGraphRoute(appCtx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -60,7 +62,7 @@ func main() {
 			return
 		}
 
-		graph, err := PostHandleGraphRoute(payload, changeService)
+		graph, err := PostHandleGraphRoute(appCtx, payload)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -79,9 +81,9 @@ func GetFullData(state *tfjson.Plan) *tfjson.Plan {
 	return state
 }
 
-func GetHandleGraphRoute(database *db.DBService, changeSerice *changes.ChangeService) (*depsgraph.DepsGraph, error) {
+func GetHandleGraphRoute(ctx appctx.AppContext) (*depsgraph.DepsGraph, error) {
 	var plan db.Plan
-	database.Connection.First(&plan)
+	ctx.Service().Database.Connection().First(&plan)
 
 	graph := depsgraph.NewDepsGraph()
 
@@ -92,15 +94,15 @@ func GetHandleGraphRoute(database *db.DBService, changeSerice *changes.ChangeSer
 		return nil, err
 	}
 
-	BuildTree(graph, storedPlan.PlannedValues.RootModule, changeSerice, storedPlan.ResourceChanges)
+	BuildTree(ctx, graph, storedPlan.PlannedValues.RootModule, storedPlan.ResourceChanges)
 
 	return graph, nil
 }
 
-func PostHandleGraphRoute(plan *tfjson.Plan, changeService *changes.ChangeService) (*depsgraph.DepsGraph, error) {
+func PostHandleGraphRoute(ctx appctx.AppContext, plan *tfjson.Plan) (*depsgraph.DepsGraph, error) {
 	graph := depsgraph.NewDepsGraph()
 
-	BuildTree(graph, plan.PlannedValues.RootModule, changeService, plan.ResourceChanges)
+	BuildTree(ctx, graph, plan.PlannedValues.RootModule, plan.ResourceChanges)
 
 	return graph, nil
 }

@@ -25,20 +25,37 @@ type ChangeData struct {
 	Values *ComplexKVPair `json:"values"`
 }
 
-func HandleVars(variables map[string]interface{}, changeService *changes.ChangeService, modKey string) VariableData {
+type IReflectorService interface {
+	HandleVars(variables map[string]interface{}, modKey string) VariableData
+	HandleChanges(changes interface{}) ChangeData
+}
+
+type ReflectorService struct {
+	changeService changes.IChangeService
+}
+
+func NewReflectorService(changeService changes.IChangeService) *ReflectorService {
+	return &ReflectorService{
+		changeService: changeService,
+	}
+}
+
+func (rs *ReflectorService) HandleVars(variables map[string]interface{}, modKey string) VariableData {
+	changeService := rs.changeService
+
 	var simpleValues []*SimpleKVPair
 	var complexValues []*ComplexKVPair
 
 	for key, value := range variables {
 		if !isEmptyValue(value) && !isDefaultValue(value) {
 			if getValueType(value) == reflect.Slice || getValueType(value) == reflect.Map {
-				complexValue := HandleComplexValue(key, value)
+				complexValue := handleComplexValue(key, value)
 				if complexValue != nil {
 					changeService.AddResourceKey(modKey, complexValue.Key)
 					complexValues = append(complexValues, complexValue)
 				}
 			} else {
-				simpleValue := HandleSimpleValue(key, value)
+				simpleValue := handleSimpleValue(key, value)
 				if simpleValue != nil {
 					changeService.AddResourceKey(modKey, simpleValue.Key)
 					simpleValues = append(simpleValues, simpleValue)
@@ -53,16 +70,16 @@ func HandleVars(variables map[string]interface{}, changeService *changes.ChangeS
 	}
 }
 
-func HandleChanges(changes interface{}) ChangeData {
+func (rs *ReflectorService) HandleChanges(changes interface{}) ChangeData {
 	if !isEmptyValue(changes) && !isDefaultValue(changes) {
 		return ChangeData{
-			Values: HandleComplexValue("changes", changes),
+			Values: handleComplexValue("changes", changes),
 		}
 	}
 	return ChangeData{}
 }
 
-func HandleSimpleValue(key string, value interface{}) *SimpleKVPair {
+func handleSimpleValue(key string, value interface{}) *SimpleKVPair {
 	if isEmptyValue(value) || isDefaultValue(value) {
 		return nil
 	}
@@ -73,7 +90,7 @@ func HandleSimpleValue(key string, value interface{}) *SimpleKVPair {
 	}
 }
 
-func HandleComplexValue(key string, value interface{}) *ComplexKVPair {
+func handleComplexValue(key string, value interface{}) *ComplexKVPair {
 	var simpleValues []*SimpleKVPair
 
 	if isEmptyValue(value) || isDefaultValue(value) {
@@ -83,7 +100,7 @@ func HandleComplexValue(key string, value interface{}) *ComplexKVPair {
 	if getValueType(value) == reflect.Slice {
 		for _, v := range value.([]interface{}) {
 			if getValueType(v) == reflect.Slice {
-				HandleComplexValue(key, v)
+				handleComplexValue(key, v)
 			} else {
 				simpleValues = append(simpleValues, &SimpleKVPair{
 					Key:   "option",
@@ -94,7 +111,7 @@ func HandleComplexValue(key string, value interface{}) *ComplexKVPair {
 	} else if getValueType(value) == reflect.Map {
 		for k, v := range value.(map[string]interface{}) {
 			if getValueType(v) == reflect.Map {
-				HandleComplexValue(k, v)
+				handleComplexValue(k, v)
 			} else {
 				simpleValues = append(simpleValues, &SimpleKVPair{
 					Key:   k,
