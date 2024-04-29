@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/thegenem0/terraspect_server/pkg/changes"
 	"github.com/thegenem0/terraspect_server/pkg/db"
 	"github.com/thegenem0/terraspect_server/pkg/depsgraph"
 )
@@ -21,6 +22,21 @@ func main() {
 	database.AutoMigrate()
 
 	routes := gin.Default()
+
+	changeService := changes.NewChangeService()
+
+	routes.GET("/graph", func(ctx *gin.Context) {
+		graph, err := GetHandleGraphRoute(database, changeService)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"error": err,
+			})
+		}
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"graph": graph,
+		})
+	})
 
 	routes.POST("/graph", func(ctx *gin.Context) {
 
@@ -37,7 +53,7 @@ func main() {
 			return
 		}
 
-		graph, err := HandleGraphRoute(payload)
+		graph, err := PostHandleGraphRoute(payload, changeService)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -56,10 +72,28 @@ func GetFullData(state *tfjson.Plan) *tfjson.Plan {
 	return state
 }
 
-func HandleGraphRoute(plan *tfjson.Plan) (*depsgraph.DepsGraph, error) {
+func GetHandleGraphRoute(database *db.DBService, changeSerice *changes.ChangeService) (*depsgraph.DepsGraph, error) {
+	var plan db.Plan
+	database.Connection.First(&plan)
+
 	graph := depsgraph.NewDepsGraph()
 
-	BuildTree(graph, plan.PlannedValues.RootModule)
+	var storedPlan *tfjson.Plan
+
+	err := json.Unmarshal(plan.TerraformPlan, &storedPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	BuildTree(graph, storedPlan.PlannedValues.RootModule, changeSerice, storedPlan.ResourceChanges)
+
+	return graph, nil
+}
+
+func PostHandleGraphRoute(plan *tfjson.Plan, changeService *changes.ChangeService) (*depsgraph.DepsGraph, error) {
+	graph := depsgraph.NewDepsGraph()
+
+	BuildTree(graph, plan.PlannedValues.RootModule, changeService, plan.ResourceChanges)
 
 	return graph, nil
 }

@@ -1,24 +1,25 @@
 package depsgraph
 
+import (
+	tfjson "github.com/hashicorp/terraform-json"
+	"github.com/thegenem0/terraspect_server/pkg/reflector"
+)
+
 type PlanNodeData struct {
-	ID        string         `json:"id,omitempty"`
-	Label     string         `json:"label,omitempty"`
-	Type      TFResourceType `json:"type,omitempty"`
-	Variables Variable       `json:"variables,omitempty"`
-	Children  []PlanNodeData `json:"children,omitempty"`
+	ID        string                  `json:"id,omitempty"`
+	Label     string                  `json:"label,omitempty"`
+	Type      TFResourceType          `json:"type,omitempty"`
+	Variables *reflector.VariableData `json:"variables,omitempty"`
+	Children  []PlanNodeData          `json:"children,omitempty"`
+	Changes   *ResourceChanges
 }
 
-type Variable []KeyValue
-
-type KeyValue struct {
-	Key   string      `json:"key,omitempty"`
-	Value interface{} `json:"value,omitempty"`
-}
-
-type PlanEdgeData struct {
-	ID     string
-	Source string
-	Target string
+type ResourceChanges struct {
+	HasChange          bool                  `json:"has_change"`
+	ChangeOps          []*tfjson.Action      `json:"change_ops,omitempty"`
+	SignificantChanges *reflector.ChangeData `json:"significant_changes,omitempty"`
+	Before             *reflector.ChangeData `json:"omit"`
+	After              *reflector.ChangeData `json:"omit"`
 }
 
 type TFResourceType string
