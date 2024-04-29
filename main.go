@@ -34,8 +34,16 @@ func main() {
 
 	routes := gin.Default()
 
+	routes.OPTIONS("/graph", func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "OK",
+		})
+	})
+
 	routes.GET("/graph", func(ctx *gin.Context) {
-		graph, err := GetHandleGraphRoute(appCtx)
+		headers := ctx.Request.Header
+		fmt.Println(headers)
+		tree, err := GetHandleGraphRoute(appCtx)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -43,7 +51,7 @@ func main() {
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{
-			"graph": graph,
+			"tree": tree.Nodes,
 		})
 	})
 
